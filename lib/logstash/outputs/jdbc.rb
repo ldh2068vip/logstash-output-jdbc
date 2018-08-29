@@ -304,7 +304,20 @@ class LogStash::Outputs::Jdbc < LogStash::Outputs::Base
       when Float
         statement.setFloat(idx + 1, value)
       when String
-        statement.setString(idx + 1, value)
+        # 处理Oracle blob字段，在input端进行base64编码，通过logstash传输到这里，进行解码，通过流写入目标数据库
+        # lengdh 2018年8月28日
+        # base64：暂定为编码协议头，以便于识别远端是否是blob
+        if value.slice(0,7) == "base64:"
+          value.slice!(0,7) #delete head info
+          decoder =Java::sun.misc.BASE64Decoder.new ;
+          bsarr=decoder.decodeBuffer(value)
+          ins=Java::Java.io.ByteArrayInputStream.new(bsarr)
+          # statement.setBytes(idx + 1, decoder.decodeBuffer(value) )
+          statement.setBinaryStream(idx + 1,ins,bsarr.length+1)
+        else
+          statement.setString(idx + 1, value)
+        end
+
       when Array, Hash
         statement.setString(idx + 1, value.to_json)
       when true, false
